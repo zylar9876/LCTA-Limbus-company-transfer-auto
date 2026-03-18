@@ -7,6 +7,7 @@ from typing import List, Dict, Optional, Union
 
 # 导入颜色渐变处理函数
 from .Faust_fancy import process_dlg_text
+from .builtinFancyFunc import builtinFunc
 from translateFunc.proper.flat import *
 
 logger = logging.getLogger('fancy')
@@ -37,7 +38,7 @@ def transform_path(source_path: tuple, aim_str: str) -> tuple:
                 new_parts.append(token)
     return tuple(new_parts)
 
-def apply_operations(value: str, operations: list) -> str:
+def apply_operations(value: str, operations: list, data: Dict[tuple, str] = {}) -> str:
     """
     依次应用 operations 中的操作。
     支持的操作类型（通过字典内容自动识别）：
@@ -54,8 +55,15 @@ def apply_operations(value: str, operations: list) -> str:
             logger.warning(f"操作不是字典，忽略: {op}")
             continue
 
+        if 'builtIn' in op:
+            funcSelectName = op['builtIn']
+            try:
+                funcSelect = builtinFunc[funcSelectName]
+            except:
+                logger.warning(f'尝试使用未定义的func: {funcSelectName}')
+            value = funcSelect(value, data)
         # 正则替换操作
-        if 'from' in op and 'to' in op:
+        elif 'from' in op and 'to' in op:
             from_re = op.get('from')
             to_str = op.get('to')
             if from_re is not None and to_str is not None:
@@ -119,7 +127,7 @@ def exec_json(data: dict, config: list) -> dict:
                     # 路径转换
                     dst_tuple = transform_path(src_tuple, aim_pattern_str)
                     # 应用操作列表
-                    new_val = apply_operations(get_value_by_path(data, dst_tuple), operations)
+                    new_val = apply_operations(get_value_by_path(data, dst_tuple), operations, data=flat_data)
                     updates[dst_tuple] = new_val
         else:
             # 无 trigger：直接匹配 aim 路径
@@ -130,7 +138,7 @@ def exec_json(data: dict, config: list) -> dict:
                 if aim_re.search(key_str)
             ]
             for key_str, key_tuple, val in matched_paths:
-                new_val = apply_operations(val, operations)
+                new_val = apply_operations(val, operations, data=flat_data)
                 updates[key_tuple] = new_val
 
     # 将更新应用到原始数据
